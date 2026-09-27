@@ -77,5 +77,25 @@ export async function generate(modelId, word) {
   let rhymes = parseList(text).slice(0, 6);
   if (looksUnusable(rhymes)) rhymes = fallback(word);
 
+  // Deterministically verify each candidate actually rhymes (same
+  // last-vowel-sound key used by the fallback) — the model occasionally
+  // mixes in a non-rhyming word (e.g. "flint" for "light"). Drop anything
+  // that fails the check; if too few survive, top up with the fallback.
+  const targetSound = lastSound(word);
+  const wordLower = word.trim().toLowerCase();
+  const seen = new Set();
+  const verified = rhymes.filter((r) => {
+    const rLower = r.toLowerCase();
+    if (rLower === wordLower || seen.has(rLower)) return false;
+    seen.add(rLower);
+    return lastSound(r) === targetSound;
+  });
+  if (verified.length < 3) {
+    const extra = fallback(word).filter((f) => !verified.includes(f));
+    rhymes = [...verified, ...extra].slice(0, 6);
+  } else {
+    rhymes = verified;
+  }
+
   return { rhymes };
 }
